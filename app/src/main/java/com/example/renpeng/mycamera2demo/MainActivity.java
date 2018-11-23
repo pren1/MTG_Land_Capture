@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
+import android.graphics.Point;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -54,6 +55,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -65,7 +67,6 @@ public class MainActivity extends Activity
      */
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     private static final int REQUEST_CAMERA_PERMISSION = 1;
-    private static final String FRAGMENT_DIALOG = "dialog";
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -104,14 +105,15 @@ public class MainActivity extends Activity
     private static final int STATE_PICTURE_TAKEN = 4;
 
     /**
-     * Max preview width that is guaranteed by Camera2 API
+     * Max preview width that is guaranteed by Camera2 API, deprecated now
      */
-    private static final int MAX_PREVIEW_WIDTH = 1920;
+    private static final int MAX_PREVIEW_WIDTH = 4032;
 
     /**
-     * Max preview height that is guaranteed by Camera2 API
+     * Max preview height that is guaranteed by Camera2 API, deprecated now
      */
-    private static final int MAX_PREVIEW_HEIGHT = 1080;
+    private static final int MAX_PREVIEW_HEIGHT = 3024;
+
     /**
      * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
      * {@link TextureView}.
@@ -172,7 +174,7 @@ public class MainActivity extends Activity
         @Override
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             // This method is called when the camera is opened.  We start camera preview here.
-            mCameraOpenCloseLock.release();// 释放信号量
+            mCameraOpenCloseLock.release();// release signal
             mCameraDevice = cameraDevice;
             createCameraPreviewSession();
         }
@@ -225,7 +227,7 @@ public class MainActivity extends Activity
 
         @Override
         public void onImageAvailable(ImageReader reader) {
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
+                mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
         }
 
     };
@@ -264,6 +266,7 @@ public class MainActivity extends Activity
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
      */
+    public boolean TAKE_IMAGE_ONCE_PER_TIME=true;
     private CameraCaptureSession.CaptureCallback mCaptureCallback
             = new CameraCaptureSession.CaptureCallback() {
 
@@ -383,6 +386,7 @@ public class MainActivity extends Activity
         int w = aspectRatio.getWidth();
         int h = aspectRatio.getHeight();
         for (Size option : choices) {
+            Log.e("MyCV","Size choice: "+option.getWidth()+ " * " + option.getHeight());
             if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight &&
                     option.getHeight() == option.getWidth() * h / w) {
                 if (option.getWidth() >= textureViewWidth &&
@@ -405,25 +409,13 @@ public class MainActivity extends Activity
             return choices[0];
         }
     }
-
-    /*public static Camera2BasicFragment newInstance() {
-        return new Camera2BasicFragment();
-    }
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_camera2_basic, container, false);
-    }*/
-
-
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         findViewById(R.id.picture).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) findViewById(R.id.texture);
-        mFile = new File(MainActivity.this.getExternalFilesDir(null), "pic2.jpg");
+        mFile = new File(MainActivity.this.getExternalFilesDir(null), UUID.randomUUID().toString()+".jpg");
     }
     @Override
     public void onResume() {
@@ -498,14 +490,25 @@ public class MainActivity extends Activity
                 if (map == null) {
                     continue;
                 }
+                float minFocalDist = characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);
+                Log.e("MyCV","minFocalDist = "+minFocalDist);
 
-                // For still image captures, we use the largest available size.
-                /*Size largest = Collections.max(
-                        Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
-                        new CompareSizesByArea());*/
-                Size largest=new Size(1920,1080);
-                Log.e("MyCV","height = "+largest.getHeight());
-                Log.e("MyCV","width = "+largest.getWidth());
+                float hyperFocalDist = characteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE);
+                Log.e("MyCV","hyperFocalDist = "+hyperFocalDist);
+
+                for(Size my_size:Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)))
+                {
+                    Log.e("MyCV","**********");
+                    Log.e("MyCV","my_size_h = "+my_size.getHeight());
+                    Log.e("MyCV","my_size_w = "+my_size.getWidth());
+                    Log.e("MyCV","scale = "+my_size.getWidth()/(1.0*my_size.getHeight()));
+                }
+
+
+                Size largest=new Size(3840,2160);
+                //Size largest=new Size(4048,3036);
+                Log.e("MyCV","largest height = "+largest.getHeight());
+                Log.e("MyCV","largest width = "+largest.getWidth());
                 mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),
                         ImageFormat.JPEG, /*maxImages*/2);
                 mImageReader.setOnImageAvailableListener(
@@ -513,7 +516,7 @@ public class MainActivity extends Activity
 
 
 
-                /*
+
                 // Find out if we need to swap dimension to get the preview size relative to sensor
                 // coordinate.
                 int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
@@ -559,22 +562,19 @@ public class MainActivity extends Activity
 
                 if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) {
                     maxPreviewHeight = MAX_PREVIEW_HEIGHT;
-                }*/
+                }
 
 
-                /*Log.e("MyCV","rotatedPreviewWidth = "+rotatedPreviewWidth);
+                Log.e("MyCV","rotatedPreviewWidth = "+rotatedPreviewWidth);
                 Log.e("MyCV","rotatedPreviewHeight = "+rotatedPreviewHeight);
 
                 Log.e("MyCV","maxPreviewWidth = "+maxPreviewWidth);
-                Log.e("MyCV","maxPreviewHeight = "+maxPreviewHeight);*/
+                Log.e("MyCV","maxPreviewHeight = "+maxPreviewHeight);
 
-                int rotatedPreviewWidth = 1794;
-                int rotatedPreviewHeight = 1080;
-                int maxPreviewWidth = 1794;
-                int maxPreviewHeight = 1080;
                 // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
+                // TODO: No, we are not using the computed previewSize
                 mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
                         rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
                         maxPreviewHeight, largest);
@@ -583,10 +583,10 @@ public class MainActivity extends Activity
                 int orientation = getResources().getConfiguration().orientation;
                 if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
                     mTextureView.setAspectRatio(
-                            mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                            4032, 1960);
                 } else {
                     mTextureView.setAspectRatio(
-                            mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                            4032, 1960);
                 }
 
                 // Check if the flash is supported.
@@ -602,13 +602,11 @@ public class MainActivity extends Activity
             // Currently an NPE is thrown when the Camera2API is used but not supported on the
             // device this code runs.
             Log.e("MyCV","Question about Camera2API not supported?");
-            /*ErrorDialog.newInstance(getString(R.string.camera_error))
-                    .show(getChildFragmentManager(), FRAGMENT_DIALOG);*/
         }
     }
 
     /**
-     * Opens the camera specified by {@link Camera2BasicFragment#mCameraId}.
+     * Opens the camera specified by
      */
     private void openCamera(int width, int height) {
         if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA)
@@ -785,7 +783,14 @@ public class MainActivity extends Activity
      * Initiate a still image capture.
      */
     private void takePicture() {
-        lockFocus();
+        if(TAKE_IMAGE_ONCE_PER_TIME){
+            TAKE_IMAGE_ONCE_PER_TIME = false;
+            lockFocus();
+        }
+        else{
+            Log.e("MyCV","No respond to multiple attempt");
+        }
+
     }
 
     /**
@@ -846,8 +851,12 @@ public class MainActivity extends Activity
             // 和预览一样，这里也用了连续拍照的聚焦模式，当然也可以改的说
             captureBuilder.set(CaptureRequest.CONTROL_AF_MODE,
                     CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+
+            // 无限焦距
+            /*captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE,0.0f);*/
             //captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
-            captureBuilder.set(CaptureRequest.JPEG_QUALITY, (byte) 95);
+            captureBuilder.set(CaptureRequest.JPEG_QUALITY, (byte) 100);
             captureBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE, CameraMetadata.NOISE_REDUCTION_MODE_HIGH_QUALITY);
             captureBuilder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON);
             setAutoFlash(captureBuilder);
@@ -924,17 +933,6 @@ public class MainActivity extends Activity
                 takePicture();
                 break;
             }
-            // info 删除这一部分
-            /*case R.id.info: {
-                Activity activity = getActivity();
-                if (null != activity) {
-                    new AlertDialog.Builder(activity)
-                            .setMessage(R.string.intro_message)
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show();
-                }
-                break;
-            }*/
         }
     }
 
@@ -950,7 +948,7 @@ public class MainActivity extends Activity
     /**
      * Saves a JPEG {@link Image} into the specified {@link File}.
      */
-    private static class ImageSaver implements Runnable {
+    private class ImageSaver implements Runnable {
 
         /**
          * The JPEG image
@@ -986,6 +984,7 @@ public class MainActivity extends Activity
                         e.printStackTrace();
                     }
                 }
+                TAKE_IMAGE_ONCE_PER_TIME = true;
             }
         }
 
@@ -1004,69 +1003,5 @@ public class MainActivity extends Activity
         }
 
     }
-    /**
-     * Shows an error message dialog.
-     */
-    public static class ErrorDialog extends DialogFragment {
-
-        private static final String ARG_MESSAGE = "message";
-
-        public static ErrorDialog newInstance(String message) {
-            ErrorDialog dialog = new ErrorDialog();
-            Bundle args = new Bundle();
-            args.putString(ARG_MESSAGE, message);
-            dialog.setArguments(args);
-            return dialog;
-        }
-
-        @NonNull
-        @Override
-        public Dialog onCreateDialog(Bundle savedInstanceState) {
-            final Activity activity = getActivity();
-            return new AlertDialog.Builder(activity)
-                    .setMessage(getArguments().getString(ARG_MESSAGE))
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            activity.finish();
-                        }
-                    })
-                    .create();
-        }
-
-    }
-
-    /**
-     * Shows OK/Cancel confirmation dialog about camera permission.
-     */
-    public static class ConfirmationDialog extends DialogFragment {
-
-        @NonNull
-        @Override
-        public Dialog onCreateDialog(Bundle savedInstanceState) {
-            final Fragment parent = getParentFragment();
-            return new AlertDialog.Builder(getActivity())
-                    .setMessage(R.string.request_permission)
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            parent.requestPermissions(new String[]{Manifest.permission.CAMERA},
-                                    REQUEST_CAMERA_PERMISSION);
-                        }
-                    })
-                    .setNegativeButton(android.R.string.cancel,
-                            new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    Activity activity = parent.getActivity();
-                                    if (activity != null) {
-                                        activity.finish();
-                                    }
-                                }
-                            })
-                    .create();
-        }
-    }
-
 
 }
