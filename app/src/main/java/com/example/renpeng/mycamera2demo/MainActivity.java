@@ -26,6 +26,7 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
@@ -58,6 +59,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import static com.example.renpeng.mycamera2demo.Delete_folder.RecursionDeleteFile;
 
 public class MainActivity extends Activity
         implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback{
@@ -227,7 +230,7 @@ public class MainActivity extends Activity
 
         @Override
         public void onImageAvailable(ImageReader reader) {
-                mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
+            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
         }
 
     };
@@ -415,7 +418,15 @@ public class MainActivity extends Activity
         setContentView(R.layout.activity_main);
         findViewById(R.id.picture).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) findViewById(R.id.texture);
-        mFile = new File(MainActivity.this.getExternalFilesDir(null), UUID.randomUUID().toString()+".jpg");
+        String File_String = Environment.getExternalStorageDirectory().getAbsolutePath() + "/MTG_Land_Capture";
+        //delete privoir folder
+        File directory = new File (File_String);
+        RecursionDeleteFile(directory);
+        //Regenerate my folder~
+        directory.mkdirs();
+
+        //mFile = new File(MainActivity.this.getExternalFilesDir(null), UUID.randomUUID().toString()+".jpg");
+        mFile = new File(File_String, UUID.randomUUID().toString()+".jpg");
     }
     @Override
     public void onResume() {
